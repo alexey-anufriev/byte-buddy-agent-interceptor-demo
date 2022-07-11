@@ -8,8 +8,10 @@ import net.bytebuddy.jar.asm.Type;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static net.bytebuddy.jar.asm.Opcodes.ACC_FINAL;
 import static net.bytebuddy.jar.asm.Opcodes.ACC_NATIVE;
@@ -36,7 +38,8 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
 
-        Set<String> disallowedMethodsOfClass = this.disallowedMethods.get(className);
+        String canonicalClassName = className.replace("/", ".");
+        Set<String> disallowedMethodsOfClass = this.disallowedMethods.get(canonicalClassName);
         if (disallowedMethodsOfClass == null) {
             return null; // no transformation
         }
@@ -71,7 +74,7 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
             }
 
             // skip non-required methods
-            if (!this.disallowedMethods.contains(name)) {
+            if (!this.disallowedMethods.contains(buildReadableMethodName(name, descriptor))) {
                 return super.visitMethod(access, name, descriptor, signature, exceptions);
             }
 
@@ -85,6 +88,18 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
 
             // build proxy-method body
             return new ProxyMethodVisitor(OP_CODES_VERSION, proxyMethodVisitor, this.className, access, name, descriptor);
+        }
+
+        private static String buildReadableMethodName(String name, String descriptor) {
+            Type methodType = Type.getMethodType(descriptor);
+
+            String returnType = methodType.getReturnType().getClassName();
+
+            String arguments = Arrays.stream(methodType.getArgumentTypes())
+                    .map(Type::getClassName)
+                    .collect(Collectors.joining(","));
+
+            return String.format("%s %s(%s)", returnType, name, arguments);
         }
 
         static class ProxyMethodVisitor extends MethodVisitor {

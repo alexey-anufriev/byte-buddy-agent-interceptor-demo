@@ -20,17 +20,19 @@ class DisallowedOperationInterceptorTest {
     @Test
     void shouldDoInterceptionIfSetup() throws IOException {
         Map<String, Set<String>> disallowedMethods = Map.of(
-                "java/lang/Thread", Set.of("sleep")
+                "java.lang.Thread", Set.of(
+                        "void sleep(long)",
+                        "java.lang.StackTraceElement[][] dumpThreads(java.lang.Thread[])")
         );
 
         DisallowedOperationConfigurer.setup(disallowedMethods);
 
         try {
-            Thread.sleep(1);
+            Thread.getAllStackTraces(); // calls `dumpThreads` inside
             fail("This statement should be unreachable");
         }
         catch (Exception e) {
-            assertThat(e.getMessage()).startsWith("DISALLOWED CALL: public static void java.lang.Thread.sleep");
+            assertThat(e.getMessage()).startsWith("DISALLOWED CALL: private static java.lang.StackTraceElement[][] java.lang.Thread.dumpThreads(java.lang.Thread[])");
         }
     }
 

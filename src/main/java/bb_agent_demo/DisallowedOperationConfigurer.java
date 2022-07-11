@@ -7,9 +7,11 @@ import net.bytebuddy.agent.builder.AgentBuilder.InstallationListener;
 import net.bytebuddy.agent.builder.AgentBuilder.Listener;
 import net.bytebuddy.agent.builder.AgentBuilder.RedefinitionStrategy;
 import net.bytebuddy.agent.builder.AgentBuilder.TypeStrategy;
+import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.loading.ClassInjector;
 import net.bytebuddy.dynamic.loading.ClassInjector.UsingInstrumentation.Target;
+import net.bytebuddy.matcher.ElementMatcher;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,11 +20,11 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static net.bytebuddy.agent.builder.AgentBuilder.RedefinitionStrategy.RETRANSFORMATION;
 import static net.bytebuddy.asm.Advice.to;
 import static net.bytebuddy.dynamic.ClassFileLocator.ForClassLoader.read;
-import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.none;
 
 final class DisallowedOperationConfigurer {
@@ -55,13 +57,31 @@ final class DisallowedOperationConfigurer {
 
         for (String clazz : disallowedMethods.keySet()) {
             for (String disallowedMethod : disallowedMethods.get(clazz)) {
-                agentBuilder = agentBuilder.type(target -> clazz.equals(target.getInternalName()))
-                        .transform((builder, typeDescription, classLoader, module) ->
-                                builder.visit(to(DisallowedOperationInterceptor.class).on(named(disallowedMethod))));
+                agentBuilder = agentBuilder
+                        .type(target -> clazz.equals(target.getCanonicalName()))
+                        .transform(transformer(disallowedMethod));
             }
         }
 
         agentBuilder.installOn(instrumentation);
+    }
+
+    private static AgentBuilder.Transformer transformer(String disallowedMethod) {
+        return (builder, typeDescription, classLoader, module) ->
+                builder.visit(to(DisallowedOperationInterceptor.class).on(match(disallowedMethod)));
+    }
+
+    private static ElementMatcher<MethodDescription> match(String disallowedMethod) {
+        return target -> {
+            String returnType = target.getReturnType().getActualName();
+
+            String arguments = target.getParameters().stream()
+                    .map(parameter -> parameter.getType().getActualName())
+                    .collect(Collectors.joining(","));
+
+            String methodName = String.format("%s %s(%s)", returnType, target.getName(), arguments);
+            return disallowedMethod.equals(methodName);
+        };
     }
 
 }
