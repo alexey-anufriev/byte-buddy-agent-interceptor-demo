@@ -26,7 +26,7 @@ import static net.bytebuddy.jar.asm.Opcodes.IRETURN;
 
 final class NativePrefixerTransformer implements ClassFileTransformer {
 
-    static String PREFIX = "$$_DEMO_AGENT_$$_";
+    static final String PREFIX = "$$_DEMO_AGENT_$$_";
 
     private final Map<String, Set<String>> disallowedMethods;
 
