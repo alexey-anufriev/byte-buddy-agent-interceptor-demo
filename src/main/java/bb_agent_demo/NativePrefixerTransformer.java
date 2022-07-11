@@ -7,11 +7,9 @@ import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Type;
 
 import java.lang.instrument.ClassFileTransformer;
-import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static net.bytebuddy.jar.asm.Opcodes.ACC_FINAL;
 import static net.bytebuddy.jar.asm.Opcodes.ACC_NATIVE;
@@ -28,9 +26,9 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
 
     static String PREFIX = "$$_DEMO_AGENT_$$_";
 
-    private final Map<Class<?>, Set<Method>> disallowedMethods;
+    private final Map<String, Set<String>> disallowedMethods;
 
-    NativePrefixerTransformer(Map<Class<?>, Set<Method>> disallowedMethods) {
+    NativePrefixerTransformer(Map<String, Set<String>> disallowedMethods) {
         this.disallowedMethods = disallowedMethods;
     }
 
@@ -38,13 +36,8 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
 
-        // comparison of Classes is not allowed here as it will lead to eager load of definition
-        Set<Method> disallowedMethodsOfClass = this.disallowedMethods.entrySet().stream()
-                .filter(entry -> Type.getInternalName(entry.getKey()).equals(className))
-                .flatMap(entry -> entry.getValue().stream())
-                .collect(Collectors.toSet());
-
-        if (disallowedMethodsOfClass.isEmpty()) {
+        Set<String> disallowedMethodsOfClass = this.disallowedMethods.get(className);
+        if (disallowedMethodsOfClass == null) {
             return null; // no transformation
         }
 
@@ -61,9 +54,9 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
 
         private static final int OP_CODES_VERSION = ASM7; // Java 11
         private final String className;
-        private final Set<Method> disallowedMethods;
+        private final Set<String> disallowedMethods;
 
-        NativeWrappingClassVisitor(ClassVisitor cw, Set<Method> disallowedMethods, String internalClassName) {
+        NativeWrappingClassVisitor(ClassVisitor cw, Set<String> disallowedMethods, String internalClassName) {
             super(OP_CODES_VERSION, cw);
 
             this.className = internalClassName;
@@ -77,12 +70,8 @@ final class NativePrefixerTransformer implements ClassFileTransformer {
                 return super.visitMethod(access, name, descriptor, signature, exceptions);
             }
 
-            Set<String> descriptors = this.disallowedMethods.stream()
-                    .map(Type::getMethodDescriptor)
-                    .collect(Collectors.toSet());
-
             // skip non-required methods
-            if (!descriptors.contains(descriptor)) {
+            if (!this.disallowedMethods.contains(name)) {
                 return super.visitMethod(access, name, descriptor, signature, exceptions);
             }
 

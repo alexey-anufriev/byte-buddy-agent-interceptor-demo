@@ -14,7 +14,6 @@ import net.bytebuddy.dynamic.loading.ClassInjector.UsingInstrumentation.Target;
 import java.io.File;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,13 +22,12 @@ import java.util.Set;
 import static net.bytebuddy.agent.builder.AgentBuilder.RedefinitionStrategy.RETRANSFORMATION;
 import static net.bytebuddy.asm.Advice.to;
 import static net.bytebuddy.dynamic.ClassFileLocator.ForClassLoader.read;
-import static net.bytebuddy.matcher.ElementMatchers.is;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.none;
 
 final class DisallowedOperationConfigurer {
 
-    public static void setup(Map<Class<?>, Set<Method>> disallowedMethods) throws IOException {
+    public static void setup(Map<String, Set<String>> disallowedMethods) throws IOException {
         // install BB agent
         Instrumentation instrumentation = ByteBuddyAgent.install();
 
@@ -55,10 +53,11 @@ final class DisallowedOperationConfigurer {
                 .with(DescriptionStrategy.Default.POOL_FIRST)
                 .ignore(none());
 
-        for (var clazz : disallowedMethods.keySet()) {
-            for (Method disallowedMethod : disallowedMethods.get(clazz)) {
-                agentBuilder = agentBuilder.type(is(clazz)).transform((builder, typeDescription, classLoader, module) ->
-                        builder.visit(to(DisallowedOperationInterceptor.class).on(named(disallowedMethod.getName()))));
+        for (String clazz : disallowedMethods.keySet()) {
+            for (String disallowedMethod : disallowedMethods.get(clazz)) {
+                agentBuilder = agentBuilder.type(target -> clazz.equals(target.getInternalName()))
+                        .transform((builder, typeDescription, classLoader, module) ->
+                                builder.visit(to(DisallowedOperationInterceptor.class).on(named(disallowedMethod))));
             }
         }
 
