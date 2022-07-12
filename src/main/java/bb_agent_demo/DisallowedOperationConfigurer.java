@@ -42,6 +42,7 @@ final class DisallowedOperationConfigurer {
         File temp = Files.createTempDirectory("tmp").toFile();
         Map<TypeDescription, byte[]> map = new HashMap<>();
         map.put(new TypeDescription.ForLoadedType(DisallowedOperation.class), read(DisallowedOperation.class));
+        map.put(new TypeDescription.ForLoadedType(DisallowedOperationInterceptorSwitch.class), read(DisallowedOperationInterceptorSwitch.class));
         ClassInjector.UsingInstrumentation.of(temp, Target.BOOTSTRAP, instrumentation).inject(map);
 
         // setup interception rules

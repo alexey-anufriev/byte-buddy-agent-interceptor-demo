@@ -7,7 +7,9 @@ final class DisallowedOperationInterceptor {
 
     @OnMethodEnter
     public static void intercept(@Advice.Origin String method) {
-        throw new DisallowedOperation("DISALLOWED CALL: " + method);
+        if (DisallowedOperationInterceptorSwitch.ENABLED.get()) {
+            throw new DisallowedOperation("DISALLOWED CALL: " + method);
+        }
     }
 
 }
