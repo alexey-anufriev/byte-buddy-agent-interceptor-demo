@@ -8,23 +8,22 @@ import net.bytebuddy.agent.builder.AgentBuilder.Listener;
 import net.bytebuddy.agent.builder.AgentBuilder.RedefinitionStrategy;
 import net.bytebuddy.agent.builder.AgentBuilder.TypeStrategy;
 import net.bytebuddy.description.method.MethodDescription;
-import net.bytebuddy.description.type.TypeDescription;
-import net.bytebuddy.dynamic.loading.ClassInjector;
-import net.bytebuddy.dynamic.loading.ClassInjector.UsingInstrumentation.Target;
 import net.bytebuddy.matcher.ElementMatcher;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
-import java.nio.file.Files;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.jar.JarFile;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static net.bytebuddy.agent.builder.AgentBuilder.RedefinitionStrategy.RETRANSFORMATION;
 import static net.bytebuddy.asm.Advice.to;
-import static net.bytebuddy.dynamic.ClassFileLocator.ForClassLoader.read;
 import static net.bytebuddy.matcher.ElementMatchers.none;
 
 final class DisallowedOperationConfigurer {
@@ -38,12 +37,10 @@ final class DisallowedOperationConfigurer {
         instrumentation.addTransformer(prefixerTransformer, true);
         instrumentation.setNativeMethodPrefix(prefixerTransformer, NativePrefixerTransformer.PREFIX);
 
-        // enrich BB agent with missing classes
-        File temp = Files.createTempDirectory("tmp").toFile();
-        Map<TypeDescription, byte[]> map = new HashMap<>();
-        map.put(new TypeDescription.ForLoadedType(DisallowedOperation.class), read(DisallowedOperation.class));
-        map.put(new TypeDescription.ForLoadedType(DisallowedOperationInterceptorSwitch.class), read(DisallowedOperationInterceptorSwitch.class));
-        ClassInjector.UsingInstrumentation.of(temp, Target.BOOTSTRAP, instrumentation).inject(map);
+        // enrich boostrap classloader with missing classes
+        extendBootstrapWithClasses(instrumentation,
+                "bb_agent_demo.DisallowedOperation",
+                "bb_agent_demo.DisallowedOperationInterceptorSwitch");
 
         // setup interception rules
         AgentBuilder agentBuilder = new AgentBuilder.Default()
@@ -66,6 +63,31 @@ final class DisallowedOperationConfigurer {
 
         agentBuilder.installOn(instrumentation);
     }
+
+    private static void extendBootstrapWithClasses(Instrumentation instrumentation, String ... classNames) throws IOException {
+        File tempJarBundle = File.createTempFile("DisallowedOperationBundle", ".jar");
+        tempJarBundle.deleteOnExit();
+
+        ClassLoader classLoader = DisallowedOperationConfigurer.class.getClassLoader();
+        try (ZipOutputStream jarBundleStream = new ZipOutputStream(new FileOutputStream(tempJarBundle))) {
+            for (String className : classNames) {
+                String classFile = className.replace(".", "/") + ".class";
+                try (InputStream classFileStream = classLoader.getResourceAsStream(classFile)) {
+                    if (classFileStream == null) {
+                        throw new IllegalArgumentException(className + " cannot be loaded for injection");
+                    }
+
+                    ZipEntry classFileEntry = new ZipEntry(classFile);
+                    jarBundleStream.putNextEntry(classFileEntry);
+                    jarBundleStream.write(classFileStream.readAllBytes());
+                }
+
+                jarBundleStream.closeEntry();
+            }
+        }
+        instrumentation.appendToBootstrapClassLoaderSearch(new JarFile(tempJarBundle));
+    }
+
 
     private static AgentBuilder.Transformer transformer(String disallowedMethod) {
         return (builder, typeDescription, classLoader, module) ->

@@ -1,6 +1,9 @@
 package bb_agent_demo;
 
+import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.IOException;
 import java.util.Map;
@@ -10,19 +13,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.fail;
 
+@TestMethodOrder(OrderAnnotation.class)
 class DisallowedOperationInterceptorTest {
 
     @Test
+    @Order(1)
     void shouldNotDoInterceptionIfNotSetup() {
-        DisallowedOperationInterceptorSwitch.ENABLED.set(true);
-
         assertThatNoException().isThrownBy(() -> Thread.sleep(1));
     }
 
     @Test
+    @Order(2)
     void shouldDoInterceptionIfSetup() throws IOException {
-        DisallowedOperationInterceptorSwitch.ENABLED.set(true);
-
         Map<String, Set<String>> disallowedMethods = Map.of(
                 "java.lang.Thread", Set.of(
                         "void sleep(long)",
@@ -41,9 +43,8 @@ class DisallowedOperationInterceptorTest {
     }
 
     @Test
+    @Order(3)
     void shouldNotDoInterceptionIfDisabled() throws IOException {
-        DisallowedOperationInterceptorSwitch.ENABLED.set(false);
-
         Map<String, Set<String>> disallowedMethods = Map.of(
                 "java.lang.Thread", Set.of(
                         "void sleep(long)",
@@ -51,6 +52,9 @@ class DisallowedOperationInterceptorTest {
         );
 
         DisallowedOperationConfigurer.setup(disallowedMethods);
+
+        // must be referenced after BB agent is set, otherwise this class will be loaded twice
+        DisallowedOperationInterceptorSwitch.ENABLED.set(false);
 
         try {
             Thread.getAllStackTraces(); // calls `dumpThreads` inside
