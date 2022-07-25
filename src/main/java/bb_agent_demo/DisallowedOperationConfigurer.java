@@ -88,7 +88,6 @@ final class DisallowedOperationConfigurer {
         instrumentation.appendToBootstrapClassLoaderSearch(new JarFile(tempJarBundle));
     }
 
-
     private static AgentBuilder.Transformer transformer(String disallowedMethod) {
         return (builder, typeDescription, classLoader, module) ->
                 builder.visit(to(DisallowedOperationInterceptor.class).on(match(disallowedMethod)));
