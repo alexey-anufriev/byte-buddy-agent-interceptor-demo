@@ -9,9 +9,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @TestMethodOrder(OrderAnnotation.class)
 class DisallowedOperationInterceptorTest {
@@ -33,17 +32,30 @@ class DisallowedOperationInterceptorTest {
 
         DisallowedOperationConfigurer.setup(disallowedMethods);
 
-        try {
-            Thread.getAllStackTraces(); // calls `dumpThreads` inside
-            fail("This statement should be unreachable");
-        }
-        catch (Exception e) {
-            assertThat(e.getMessage()).startsWith("DISALLOWED CALL: private static java.lang.StackTraceElement[][] java.lang.Thread.dumpThreads(java.lang.Thread[])");
-        }
+        assertThatNoException().isThrownBy(() -> Thread.currentThread()); // should work fine as allowed
+
+        assertThatThrownBy(() -> Thread.getAllStackTraces()) // calls `dumpThreads` inside
+                .hasMessageStartingWith("DISALLOWED CALL: private static java.lang.StackTraceElement[][] java.lang.Thread.dumpThreads(java.lang.Thread[])");
     }
 
     @Test
     @Order(3)
+    void shouldDoWildcardInterception() throws IOException {
+        Map<String, Set<String>> disallowedMethods = Map.of(
+                "bb_agent_demo.TestClass", Set.of("*")
+        );
+
+        DisallowedOperationConfigurer.setup(disallowedMethods);
+
+        assertThatThrownBy(() -> new TestClass())
+                .hasMessageStartingWith("DISALLOWED CALL: bb_agent_demo.TestClass()");
+
+        assertThatThrownBy(() -> TestClass.someOtherMethod())
+                .hasMessageStartingWith("DISALLOWED CALL: public static void bb_agent_demo.TestClass.someOtherMethod()");
+    }
+
+    @Test
+    @Order(4)
     void shouldNotDoInterceptionIfDisabled() throws IOException {
         Map<String, Set<String>> disallowedMethods = Map.of(
                 "java.lang.Thread", Set.of(
@@ -56,12 +68,7 @@ class DisallowedOperationInterceptorTest {
         // must be referenced after BB agent is set, otherwise this class will be loaded twice
         DisallowedOperationInterceptorSwitch.ENABLED.set(false);
 
-        try {
-            Thread.getAllStackTraces(); // calls `dumpThreads` inside
-        }
-        catch (Exception e) {
-            fail("No exceptions are expected");
-        }
+        assertThatNoException().isThrownBy(() -> Thread.getAllStackTraces()); // calls `dumpThreads` inside
     }
 
 }
