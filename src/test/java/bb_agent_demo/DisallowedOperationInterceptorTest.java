@@ -40,22 +40,6 @@ class DisallowedOperationInterceptorTest {
 
     @Test
     @Order(3)
-    void shouldDoWildcardInterception() throws IOException {
-        Map<String, Set<String>> disallowedMethods = Map.of(
-                "bb_agent_demo.TestClass", Set.of("*")
-        );
-
-        DisallowedOperationConfigurer.setup(disallowedMethods);
-
-        assertThatThrownBy(() -> new TestClass())
-                .hasMessageStartingWith("DISALLOWED CALL: bb_agent_demo.TestClass()");
-
-        assertThatThrownBy(() -> TestClass.someOtherMethod())
-                .hasMessageStartingWith("DISALLOWED CALL: public static void bb_agent_demo.TestClass.someOtherMethod()");
-    }
-
-    @Test
-    @Order(4)
     void shouldNotDoInterceptionIfDisabled() throws IOException {
         Map<String, Set<String>> disallowedMethods = Map.of(
                 "java.lang.Thread", Set.of(

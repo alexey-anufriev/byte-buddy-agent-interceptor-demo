@@ -95,10 +95,6 @@ final class DisallowedOperationConfigurer {
 
     private static ElementMatcher<MethodDescription> match(String disallowedMethod) {
         return target -> {
-            if ("*".equals(disallowedMethod)) {
-                return true;
-            }
-
             String returnType = target.getReturnType().getActualName();
 
             String arguments = target.getParameters().stream()
